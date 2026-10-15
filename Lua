@@ -1,0 +1,175 @@
+-- STREAMING_CHUNK:Initializing services and local player references...
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+-- STREAMING_CHUNK:Defining configuration state variables...
+local isPulling = false
+local currentTarget = nil
+local pullDistance = 5 -- Default distance in studs
+local minDistance = 2
+local maxDistance = 25
+local connection = nil
+-- STREAMING_CHUNK:Creating the User Interface (ScreenGui)...
+local playerGui = player:WaitForChild("PlayerGui")
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ObjectPullerUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+-- Main Container Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 220, 0, 160)
+mainFrame.Position = UDim2.new(0.05, 0, 0.6, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+-- Title Label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 35)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Object Puller Tool"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 16
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+-- Toggle Button (Open/Close Puller)
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0.9, 0, 0, 35)
+toggleButton.Position = UDim2.new(0.05, 0, 0.25, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+toggleButton.Text = "Toggle Puller: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize = 14
+toggleButton.Font = Enum.Font.GothamSemibold
+toggleButton.Parent = mainFrame
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 8)
+btnCorner.Parent = toggleButton
+-- Distance Control Label
+local distLabel = Instance.new("TextLabel")
+distLabel.Size = UDim2.new(0.9, 0, 0, 25)
+distLabel.Position = UDim2.new(0.05, 0, 0.52, 0)
+distLabel.BackgroundTransparency = 1
+distLabel.Text = "Distance: " .. pullDistance .. " studs"
+distLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+distLabel.TextSize = 13
+distLabel.Font = Enum.Font.Gotham
+distLabel.Parent = mainFrame
+-- Distance Decrease Button (-)
+local minusButton = Instance.new("TextButton")
+minusButton.Size = UDim2.new(0.42, 0, 0, 30)
+minusButton.Position = UDim2.new(0.05, 0, 0.72, 0)
+minusButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+minusButton.Text = "- Distance"
+minusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minusButton.TextSize = 13
+minusButton.Font = Enum.Font.GothamSemibold
+minusButton.Parent = mainFrame
+local minusCorner = Instance.new("UICorner")
+minusCorner.CornerRadius = UDim.new(0, 6)
+minusCorner.Parent = minusButton
+-- Distance Increase Button (+)
+local plusButton = Instance.new("TextButton")
+plusButton.Size = UDim2.new(0.42, 0, 0, 30)
+plusButton.Position = UDim2.new(0.53, 0, 0.72, 0)
+plusButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+plusButton.Text = "+ Distance"
+plusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+plusButton.TextSize = 13
+plusButton.Font = Enum.Font.GothamSemibold
+plusButton.Parent = mainFrame
+local plusCorner = Instance.new("UICorner")
+plusCorner.CornerRadius = UDim.new(0, 6)
+plusCorner.Parent = plusButton
+-- STREAMING_CHUNK:Defining core object targeting and raycasting logic...
+local function findTargetObject()
+local mouse = player:GetMouse()
+local targetPart = mouse.Target
+if targetPart and not targetPart.Anchored and targetPart:IsA("BasePart") then
+-- Ensure the part is not part of the player's character
+if not targetPart:IsDescendantOf(character) then
+return targetPart
+end
+end
+return nil
+end
+-- STREAMING_CHUNK:Implementing the physics loop to keep object in front of character...
+local function startPullingLoop()
+if connection then connection:Disconnect() end
+connection = RunService.RenderStepped:Connect(function()
+if not isPulling or not currentTarget or not currentTarget.Parent then
+return
+end
+-- Calculate target CFrame position in front of HumanoidRootPart
+local rootCFrame = humanoidRootPart.CFrame
+local desiredCFrame = rootCFrame + (rootCFrame.LookVector * pullDistance)
+-- Apply smooth physics movement to the part
+local currentCF = currentTarget.CFrame
+local targetCF = CFrame.new(desiredCFrame.Position) * currentCF.Rotation
+-- Set velocity to zero to avoid erratic physics bouncing
+if currentTarget:IsA("BasePart") then
+currentTarget.Velocity = Vector3.new(0, 0, 0)
+currentTarget.RotVelocity = Vector3.new(0, 0, 0)
+currentTarget.CFrame = currentCF:Lerp(targetCF, 0.3)
+end
+end)
+end
+-- STREAMING_CHUNK:Setting up UI event listeners and button actions...
+toggleButton.MouseButton1Click:Connect(function()
+isPulling = not isPulling
+if isPulling then
+currentTarget = findTargetObject()
+if currentTarget then
+toggleButton.Text = "Toggle Puller: ON"
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+startPullingLoop()
+else
+isPulling = false
+toggleButton.Text = "No Part Found!"
+task.delay(1, function()
+if not isPulling then
+toggleButton.Text = "Toggle Puller: OFF"
+end
+end)
+end
+else
+toggleButton.Text = "Toggle Puller: OFF"
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+currentTarget = nil
+if connection then
+connection:Disconnect()
+connection = nil
+end
+end
+end)
+minusButton.MouseButton1Click:Connect(function()
+if pullDistance > minDistance then
+pullDistance = pullDistance - 1
+distLabel.Text = "Distance: " .. pullDistance .. " studs"
+end
+end)
+plusButton.MouseButton1Click:Connect(function()
+if pullDistance < maxDistance then
+pullDistance = pullDistance + 1
+distLabel.Text = "Distance: " .. pullDistance .. " studs"
+end
+end)
+-- STREAMING_CHUNK:Handling character respawn updates...
+player.CharacterAdded:Connect(function(newChar)
+character = newChar
+humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+isPulling = false
+currentTarget = nil
+toggleButton.Text = "Toggle Puller: OFF"
+if connection then
+connection:Disconnect()
+connection = nil
+end
+end)
